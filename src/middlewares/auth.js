@@ -1,12 +1,8 @@
-// src/auth.js
 const jwt = require("jsonwebtoken");
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
-
-  if (!header) {
-    return res.status(401).json({ ok: false, error: "Token no proporcionado" });
-  }
+  if (!header) return res.status(401).json({ ok: false, error: "Token no proporcionado" });
 
   const [type, token] = header.split(" ");
   if (type !== "Bearer" || !token) {
@@ -14,10 +10,9 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id, cliente_id, rol, email, iat, exp }
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({ ok: false, error: "Token inválido o expirado" });
   }
 }
@@ -25,10 +20,8 @@ function requireAuth(req, res, next) {
 function requireRole(...roles) {
   return (req, res, next) => {
     const rol = req.user?.rol;
-    if (!rol) return res.status(403).json({ ok: false, error: "Rol no encontrado" });
-    if (!roles.includes(rol)) {
-      return res.status(403).json({ ok: false, error: "Sin permisos" });
-    }
+    if (!rol) return res.status(403).json({ ok: false, error: "Rol no disponible" });
+    if (!roles.includes(rol)) return res.status(403).json({ ok: false, error: "Sin permisos" });
     next();
   };
 }
