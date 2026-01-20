@@ -21,4 +21,42 @@ async function insertCampo({ cliente_id, nombre, superficie, observaciones }) {
   return r.rows[0];
 }
 
-module.exports = { findAllByCliente, insertCampo };
+async function findById(id) {
+  const r = await db.query(
+    `SELECT id, cliente_id, nombre, superficie, observaciones, created_at
+     FROM campos
+     WHERE id = $1`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
+async function updateCampo({ id, nombre, superficie, observaciones }) {
+  const r = await db.query(
+    `UPDATE campos
+     SET nombre = $2, superficie = $3, observaciones = $4
+     WHERE id = $1
+     RETURNING id, cliente_id, nombre, superficie, observaciones, created_at`,
+    [id, nombre, superficie, observaciones ?? null]
+  );
+  return r.rows[0] || null;
+}
+
+async function deleteCampo(id) {
+  const r = await db.query(
+    `DELETE FROM campos
+     WHERE id = $1
+     RETURNING id`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
+module.exports = {
+  findAllByCliente,
+  insertCampo,
+  findById,
+  updateCampo,
+  deleteCampo,
+};
+
