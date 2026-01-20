@@ -14,19 +14,29 @@ async function createCampo(req, res) {
     return res.status(400).json({ ok: false, error: "nombre es obligatorio" });
   }
 
-  // Validación simple (más validaciones si querés)
-  if (superficie != null && Number(superficie) < 0) {
-    return res.status(400).json({ ok: false, error: "superficie no puede ser negativa" });
+   // superficie obligatoria
+  if (superficie === undefined || superficie === null) {
+    return res.status(400).json({ ok: false, error: "superficie es obligatoria" });
+  }
+
+  const superficieNum = Number(superficie);
+
+  if (Number.isNaN(superficieNum)) {
+    return res.status(400).json({ ok: false, error: "superficie debe ser un número" });
+  }
+
+  if (superficieNum <= 0) {
+    return res.status(400).json({ ok: false, error: "superficie debe ser mayor a 0" });
   }
 
   const nuevo = await repo.insertCampo({
     cliente_id: clienteId,
     nombre: String(nombre).trim(),
-    superficie: superficie != null ? Number(superficie) : null,
+    superficie: superficieNum,
     observaciones: observaciones ? String(observaciones).trim() : null,
   });
 
-  res.status(201).json({ ok: true, data: nuevo });
+  return res.status(201).json({ ok: true, data: nuevo });
 }
 
 module.exports = { listCampos, createCampo };
