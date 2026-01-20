@@ -96,8 +96,14 @@ async function removeCampo(req, res) {
     return res.status(404).json({ ok: false, error: "Campo no encontrado" });
   }
 
-  const deleted = await repo.deleteCampo(id);
-  return res.json({ ok: true, data: deleted });
+  // Si ya está inactivo, lo tratamos como ok idempotente
+  if (existing.activo === false) {
+    return res.json({ ok: true, data: { id: existing.id, activo: false } });
+  }
+
+  const updated = await repo.deactivateCampo(id);
+  return res.json({ ok: true, data: updated });
 }
+
 
 module.exports = { listCampos, createCampo, updateCampo, removeCampo };

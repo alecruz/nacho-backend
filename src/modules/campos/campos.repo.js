@@ -5,6 +5,7 @@ async function findAllByCliente(clienteId) {
     `SELECT id, cliente_id, nombre, superficie, observaciones, created_at
      FROM campos
      WHERE cliente_id = $1
+       AND activo = true
      ORDER BY id DESC`,
     [clienteId]
   );
@@ -23,7 +24,7 @@ async function insertCampo({ cliente_id, nombre, superficie, observaciones }) {
 
 async function findById(id) {
   const r = await db.query(
-    `SELECT id, cliente_id, nombre, superficie, observaciones, created_at
+    `SELECT id, cliente_id, nombre, superficie, observaciones, activo, created_at
      FROM campos
      WHERE id = $1`,
     [id]
@@ -52,11 +53,23 @@ async function deleteCampo(id) {
   return r.rows[0] || null;
 }
 
+async function deactivateCampo(id) {
+  const r = await db.query(
+    `UPDATE campos
+     SET activo = false
+     WHERE id = $1
+     RETURNING id, activo`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
 module.exports = {
   findAllByCliente,
   insertCampo,
   findById,
   updateCampo,
   deleteCampo,
+  deactivateCampo,
 };
 
