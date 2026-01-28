@@ -9,6 +9,7 @@ const { errorHandler, notFound } = require("./middlewares/errorHandler");
 const authRoutes = require("./modules/auth/auth.routes");
 const camposRoutes = require("./modules/campos/campos.routes");
 const cultivosRoutes = require("./modules/cultivos/cultivos.routes");
+const lotesRoutes = require("./modules/lotes/lotes.routes");
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.get("/", (req, res) => res.json({ ok: true, message: "Backend funcionando �
 app.use("/auth", authRoutes);     // login, etc.
 app.use("/campos", camposRoutes); // módulo campos
 app.use("/cultivos", cultivosRoutes); // módulo cultivos
+app.use("/lotes", lotesRoutes); // módulo lotes
 
 
 app.use(notFound);
