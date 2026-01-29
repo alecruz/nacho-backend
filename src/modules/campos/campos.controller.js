@@ -6,6 +6,30 @@ async function listCampos(req, res) {
   res.json({ ok: true, data: campos });
 }
 
+async function getCampoById(req, res) {
+  const clienteId = req.user.cliente_id;
+  const id = Number(req.params.id);
+
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ ok: false, error: "id inválido" });
+  }
+
+  const existing = await repo.findById(id);
+  if (!existing) return res.status(404).json({ ok: false, error: "Campo no encontrado" });
+
+  // Seguridad multi-cliente
+  if (existing.cliente_id !== clienteId) {
+    return res.status(404).json({ ok: false, error: "Campo no encontrado" });
+  }
+
+  // Si querés, podés impedir ver inactivos
+  if (existing.activo === false) {
+    return res.status(404).json({ ok: false, error: "Campo no encontrado" });
+  }
+
+  return res.json({ ok: true, data: existing });
+}
+
 async function createCampo(req, res) {
   const clienteId = req.user.cliente_id;
   const { nombre, superficie, observaciones } = req.body;
@@ -106,4 +130,4 @@ async function removeCampo(req, res) {
 }
 
 
-module.exports = { listCampos, createCampo, updateCampo, removeCampo };
+module.exports = { listCampos, getCampoById, createCampo, updateCampo, removeCampo };
