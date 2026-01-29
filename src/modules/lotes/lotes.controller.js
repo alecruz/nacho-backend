@@ -53,7 +53,7 @@ async function getLoteById(req, res) {
   try {
     const { id } = req.params;
 
-    const lote = await lotesRepo.getLoteById(Number(id));
+    const lote = await lotesRepo.findById(Number(id));
     if (!lote) return res.status(404).json({ error: "Lote no encontrado" });
 
     return res.json(lote);
@@ -75,7 +75,7 @@ async function updateLote(req, res) {
       return res.status(400).json({ error: "superficie debe ser un número mayor a 0" });
     }
 
-    const updated = await lotesRepo.updateLote(Number(id), {
+    const updated = await lotesRepo.update(Number(id), {
       nombre: String(nombre).trim(),
       superficie: Number(superficie),
       observaciones: observaciones ? String(observaciones).trim() : null,
@@ -93,7 +93,7 @@ async function deleteLote(req, res) {
   try {
     const { id } = req.params;
 
-    const deleted = await lotesRepo.softDeleteLote(Number(id));
+    const deleted = await lotesRepo.softDelete(Number(id));
     if (!deleted) return res.status(404).json({ error: "Lote no encontrado" });
 
     return res.json({ ok: true, lote: deleted });
