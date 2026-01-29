@@ -38,7 +38,7 @@ async function getLotes(req, res) {
   try {
     const { campo_id } = req.query;
 
-    const lotes = await lotesRepo.getLotes({
+    const lotes = await lotesRepo.findAll({
       campo_id: campo_id ? Number(campo_id) : undefined,
     });
 
