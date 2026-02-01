@@ -1,4 +1,3 @@
-// /lotes/lotes.routes.js
 const express = require("express");
 const controller = require("./lotes.controller");
 

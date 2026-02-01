@@ -8,7 +8,7 @@ function isPositiveNumber(value) {
 
 async function createLote(req, res) {
   try {
-    const { campo_id, nombre, superficie, observaciones } = req.body;
+    const { campo_id, nombre, superficie, observaciones, cultivos } = req.body;
 
     if (!campo_id) {
       return res.status(400).json({ error: "campo_id es obligatorio" });
@@ -20,11 +20,42 @@ async function createLote(req, res) {
       return res.status(400).json({ error: "superficie debe ser un número mayor a 0" });
     }
 
-    const lote = await lotesRepo.createLote({
+    const supNum = Number(superficie);
+
+    // ---- Validación / normalización de cultivos (si vienen) ----
+    let cultivosClean = [];
+
+    if (Array.isArray(cultivos) && cultivos.length > 0) {
+      cultivosClean = cultivos.map((c) => ({
+        cultivo_id: Number(c.cultivo_id),
+        ha_cultivo: Number(c.ha_cultivo),
+      }));
+
+      for (const c of cultivosClean) {
+        if (!Number.isFinite(c.cultivo_id) || c.cultivo_id <= 0) {
+          return res.status(400).json({ error: "cultivo_id inválido en cultivos[]" });
+        }
+        if (!Number.isFinite(c.ha_cultivo) || c.ha_cultivo <= 0) {
+          return res.status(400).json({ error: "ha_cultivo debe ser un número mayor a 0 en cultivos[]" });
+        }
+      }
+
+      // Opcional recomendado: suma de ha_cultivo <= superficie del lote
+      const suma = cultivosClean.reduce((acc, x) => acc + x.ha_cultivo, 0);
+      if (suma > supNum + 1e-9) {
+        return res.status(400).json({
+          error: "La suma de superficies cultivadas no puede superar la superficie del lote",
+        });
+      }
+    }
+
+    // ✅ Insertar lote + lote_cultivos si corresponde
+    const lote = await lotesRepo.createLoteWithCultivos({
       campo_id: Number(campo_id),
       nombre: String(nombre).trim(),
-      superficie: Number(superficie),
+      superficie: supNum,
       observaciones: observaciones ? String(observaciones).trim() : null,
+      cultivos: cultivosClean,
     });
 
     return res.status(201).json(lote);
