@@ -1,4 +1,4 @@
-// /lotes/lotes.controller.js
+// src/modules/lotes/lotes.controller.js
 const lotesRepo = require("./lotes.repo");
 
 function isPositiveNumber(value) {
@@ -40,7 +40,7 @@ async function createLote(req, res) {
         }
       }
 
-      // Opcional recomendado: suma de ha_cultivo <= superficie del lote
+      // suma de ha_cultivo <= superficie del lote
       const suma = cultivosClean.reduce((acc, x) => acc + x.ha_cultivo, 0);
       if (suma > supNum + 1e-9) {
         return res.status(400).json({
@@ -49,7 +49,7 @@ async function createLote(req, res) {
       }
     }
 
-    // ✅ Insertar lote + lote_cultivos si corresponde
+    // Insertar lote + lote_cultivos si corresponde
     const lote = await lotesRepo.createLoteWithCultivos({
       campo_id: Number(campo_id),
       nombre: String(nombre).trim(),
@@ -58,7 +58,9 @@ async function createLote(req, res) {
       cultivos: cultivosClean,
     });
 
-    return res.status(201).json(lote);
+    // Si querés devolver ya con cultivos, podés “rehidratar”:
+    const loteFull = await lotesRepo.findById(Number(lote.id));
+    return res.status(201).json(loteFull ?? lote);
   } catch (err) {
     console.error("createLote error:", err);
     return res.status(500).json({ error: "Error interno al crear lote" });
@@ -113,7 +115,10 @@ async function updateLote(req, res) {
     });
 
     if (!updated) return res.status(404).json({ error: "Lote no encontrado" });
-    return res.json(updated);
+
+    // Devolvemos el lote con cultivos (más útil para el front)
+    const updatedFull = await lotesRepo.findById(Number(id));
+    return res.json(updatedFull ?? updated);
   } catch (err) {
     console.error("updateLote error:", err);
     return res.status(500).json({ error: "Error interno al actualizar lote" });

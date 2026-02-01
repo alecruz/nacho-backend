@@ -14,17 +14,13 @@ async function createLote({ campo_id, nombre, superficie, observaciones }) {
 
 /**
  * ✅ Crear lote + insertar cultivos en lote_cultivos
- * sin usar db.connect(), todo en una sola query (CTE).
- *
  * cultivos: [{ cultivo_id, ha_cultivo }, ...]
  */
 async function createLoteWithCultivos({ campo_id, nombre, superficie, observaciones, cultivos }) {
-  // Si no hay cultivos, inserta solo el lote
   if (!Array.isArray(cultivos) || cultivos.length === 0) {
     return createLote({ campo_id, nombre, superficie, observaciones });
   }
 
-  // Armamos arrays para unnest()
   const cultivoIds = cultivos.map((c) => Number(c.cultivo_id));
   const haCultivos = cultivos.map((c) => Number(c.ha_cultivo));
 
@@ -54,34 +50,85 @@ async function createLoteWithCultivos({ campo_id, nombre, superficie, observacio
   return r.rows[0];
 }
 
-// Listar lotes (opcional por campo)
+/**
+ * ✅ Listar lotes (opcional por campo) incluyendo cultivos asociados
+ * Devuelve: [{..., cultivos: [{id, nombre, ha_cultivo}, ...]}]
+ */
 async function findAll({ campo_id } = {}) {
-  let query = `
-    SELECT id, campo_id, nombre, superficie, observaciones, created_at, activo
-    FROM lotes
-    WHERE activo = true
-  `;
   const params = [];
+  let where = `WHERE l.activo = true`;
 
   if (campo_id) {
     params.push(campo_id);
-    query += ` AND campo_id = $${params.length}`;
+    where += ` AND l.campo_id = $${params.length}`;
   }
 
-  query += ` ORDER BY id ASC`;
+  const r = await db.query(
+    `
+    SELECT
+      l.id,
+      l.campo_id,
+      l.nombre,
+      l.superficie,
+      l.observaciones,
+      l.created_at,
+      l.activo,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'id', c.id,
+            'nombre', c.nombre,
+            'ha_cultivo', lc.ha_cultivo
+          )
+        ) FILTER (WHERE lc.id IS NOT NULL),
+        '[]'::json
+      ) AS cultivos
+    FROM lotes l
+    LEFT JOIN lote_cultivos lc ON lc.lote_id = l.id
+    LEFT JOIN cultivos c ON c.id = lc.cultivo_id
+    ${where}
+    GROUP BY l.id
+    ORDER BY l.id ASC
+    `,
+    params
+  );
 
-  const r = await db.query(query, params);
   return r.rows;
 }
 
-// Buscar lote por id
+/**
+ * ✅ Buscar lote por id incluyendo cultivos
+ */
 async function findById(id) {
   const r = await db.query(
-    `SELECT id, campo_id, nombre, superficie, observaciones, created_at, activo
-     FROM lotes
-     WHERE id = $1`,
+    `
+    SELECT
+      l.id,
+      l.campo_id,
+      l.nombre,
+      l.superficie,
+      l.observaciones,
+      l.created_at,
+      l.activo,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'id', c.id,
+            'nombre', c.nombre,
+            'ha_cultivo', lc.ha_cultivo
+          )
+        ) FILTER (WHERE lc.id IS NOT NULL),
+        '[]'::json
+      ) AS cultivos
+    FROM lotes l
+    LEFT JOIN lote_cultivos lc ON lc.lote_id = l.id
+    LEFT JOIN cultivos c ON c.id = lc.cultivo_id
+    WHERE l.id = $1
+    GROUP BY l.id
+    `,
     [id]
   );
+
   return r.rows[0] || null;
 }
 
@@ -113,7 +160,7 @@ async function softDelete(id) {
 
 module.exports = {
   createLote,
-  createLoteWithCultivos, // ✅ ahora funciona sin db.connect()
+  createLoteWithCultivos,
   findAll,
   findById,
   update,
