@@ -1,4 +1,4 @@
-// /lotes/lotes.repo.js
+// src/modules/lotes/lotes.repo.js
 const db = require("../../db");
 
 // Crear lote (solo lotes)
@@ -9,46 +9,49 @@ async function createLote({ campo_id, nombre, superficie, observaciones }) {
      RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo`,
     [campo_id, nombre, superficie, observaciones ?? null]
   );
-
   return r.rows[0];
 }
 
-// ✅ Crear lote + cultivos (transacción)
+/**
+ * ✅ Crear lote + insertar cultivos en lote_cultivos
+ * sin usar db.connect(), todo en una sola query (CTE).
+ *
+ * cultivos: [{ cultivo_id, ha_cultivo }, ...]
+ */
 async function createLoteWithCultivos({ campo_id, nombre, superficie, observaciones, cultivos }) {
-  const client = await db.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    // 1) insertar lote
-    const loteRes = await client.query(
-      `INSERT INTO lotes (campo_id, nombre, superficie, observaciones, activo)
-       VALUES ($1, $2, $3, $4, true)
-       RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo`,
-      [campo_id, nombre, superficie, observaciones ?? null]
-    );
-
-    const lote = loteRes.rows[0];
-
-    // 2) insertar lote_cultivos si vienen
-    if (Array.isArray(cultivos) && cultivos.length > 0) {
-      for (const c of cultivos) {
-        await client.query(
-          `INSERT INTO lote_cultivos (lote_id, cultivo_id, ha_cultivo)
-           VALUES ($1, $2, $3)`,
-          [lote.id, c.cultivo_id, c.ha_cultivo]
-        );
-      }
-    }
-
-    await client.query("COMMIT");
-    return lote;
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
+  // Si no hay cultivos, inserta solo el lote
+  if (!Array.isArray(cultivos) || cultivos.length === 0) {
+    return createLote({ campo_id, nombre, superficie, observaciones });
   }
+
+  // Armamos arrays para unnest()
+  const cultivoIds = cultivos.map((c) => Number(c.cultivo_id));
+  const haCultivos = cultivos.map((c) => Number(c.ha_cultivo));
+
+  const r = await db.query(
+    `
+    WITH lote AS (
+      INSERT INTO lotes (campo_id, nombre, superficie, observaciones, activo)
+      VALUES ($1, $2, $3, $4, true)
+      RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo
+    ),
+    ins AS (
+      INSERT INTO lote_cultivos (lote_id, cultivo_id, ha_cultivo)
+      SELECT
+        lote.id,
+        x.cultivo_id,
+        x.ha_cultivo
+      FROM lote
+      JOIN unnest($5::int[], $6::numeric[]) AS x(cultivo_id, ha_cultivo)
+        ON true
+      RETURNING 1
+    )
+    SELECT * FROM lote;
+    `,
+    [campo_id, nombre, superficie, observaciones ?? null, cultivoIds, haCultivos]
+  );
+
+  return r.rows[0];
 }
 
 // Listar lotes (opcional por campo)
@@ -79,8 +82,7 @@ async function findById(id) {
      WHERE id = $1`,
     [id]
   );
-
-  return r.rows[0];
+  return r.rows[0] || null;
 }
 
 // Actualizar lote
@@ -94,8 +96,7 @@ async function update(id, { nombre, superficie, observaciones }) {
      RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo`,
     [id, nombre, superficie, observaciones ?? null]
   );
-
-  return r.rows[0];
+  return r.rows[0] || null;
 }
 
 // Borrado lógico
@@ -107,13 +108,12 @@ async function softDelete(id) {
      RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo`,
     [id]
   );
-
-  return r.rows[0];
+  return r.rows[0] || null;
 }
 
 module.exports = {
   createLote,
-  createLoteWithCultivos, // ✅ nuevo
+  createLoteWithCultivos, // ✅ ahora funciona sin db.connect()
   findAll,
   findById,
   update,
