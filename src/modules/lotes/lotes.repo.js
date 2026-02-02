@@ -51,8 +51,8 @@ async function createLoteWithCultivos({ campo_id, nombre, superficie, observacio
 }
 
 /**
- * ✅ Listar lotes (opcional por campo) incluyendo cultivos asociados
- * Devuelve: [{..., cultivos: [{id, nombre, ha_cultivo}, ...]}]
+ * ✅ Listar lotes + cultivos asociados (opcional por campo)
+ * Devuelve: [{..., cultivos:[{cultivo_id,nombre,ha_cultivo}, ...]}]
  */
 async function findAll({ campo_id } = {}) {
   const params = [];
@@ -76,10 +76,11 @@ async function findAll({ campo_id } = {}) {
       COALESCE(
         json_agg(
           json_build_object(
-            'id', c.id,
+            'cultivo_id', lc.cultivo_id,
             'nombre', c.nombre,
             'ha_cultivo', lc.ha_cultivo
           )
+          ORDER BY lc.id
         ) FILTER (WHERE lc.id IS NOT NULL),
         '[]'::json
       ) AS cultivos
@@ -97,7 +98,7 @@ async function findAll({ campo_id } = {}) {
 }
 
 /**
- * ✅ Buscar lote por id incluyendo cultivos
+ * ✅ Buscar lote por id + cultivos
  */
 async function findById(id) {
   const r = await db.query(
@@ -113,10 +114,11 @@ async function findById(id) {
       COALESCE(
         json_agg(
           json_build_object(
-            'id', c.id,
+            'cultivo_id', lc.cultivo_id,
             'nombre', c.nombre,
             'ha_cultivo', lc.ha_cultivo
           )
+          ORDER BY lc.id
         ) FILTER (WHERE lc.id IS NOT NULL),
         '[]'::json
       ) AS cultivos
@@ -128,21 +130,86 @@ async function findById(id) {
     `,
     [id]
   );
-
   return r.rows[0] || null;
 }
 
-// Actualizar lote
-async function update(id, { nombre, superficie, observaciones }) {
+/**
+ * ✅ Actualizar lote + reemplazar cultivos (delete + insert)
+ * Si cultivos = [] => borra todos los cultivos del lote.
+ */
+async function updateWithCultivos(id, { nombre, superficie, observaciones, cultivos }) {
+  const hasCultivos = Array.isArray(cultivos);
+
+  if (!hasCultivos) {
+    // compat: si no mandan cultivos, actualiza solo lote
+    const r = await db.query(
+      `UPDATE lotes
+       SET nombre = $2,
+           superficie = $3,
+           observaciones = $4
+       WHERE id = $1
+       RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo`,
+      [id, nombre, superficie, observaciones ?? null]
+    );
+    return r.rows[0] || null;
+  }
+
+  const cultivoIds = cultivos.map((c) => Number(c.cultivo_id));
+  const haCultivos = cultivos.map((c) => Number(c.ha_cultivo));
+
+  // Si viene []: solo delete
+  if (cultivos.length === 0) {
+    const r = await db.query(
+      `
+      WITH upd AS (
+        UPDATE lotes
+        SET nombre = $2,
+            superficie = $3,
+            observaciones = $4
+        WHERE id = $1
+        RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo
+      ),
+      del AS (
+        DELETE FROM lote_cultivos
+        WHERE lote_id = $1
+        RETURNING 1
+      )
+      SELECT * FROM upd;
+      `,
+      [id, nombre, superficie, observaciones ?? null]
+    );
+    return r.rows[0] || null;
+  }
+
   const r = await db.query(
-    `UPDATE lotes
-     SET nombre = $2,
-         superficie = $3,
-         observaciones = $4
-     WHERE id = $1
-     RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo`,
-    [id, nombre, superficie, observaciones ?? null]
+    `
+    WITH upd AS (
+      UPDATE lotes
+      SET nombre = $2,
+          superficie = $3,
+          observaciones = $4
+      WHERE id = $1
+      RETURNING id, campo_id, nombre, superficie, observaciones, created_at, activo
+    ),
+    del AS (
+      DELETE FROM lote_cultivos
+      WHERE lote_id = $1
+      RETURNING 1
+    ),
+    ins AS (
+      INSERT INTO lote_cultivos (lote_id, cultivo_id, ha_cultivo)
+      SELECT
+        $1,
+        x.cultivo_id,
+        x.ha_cultivo
+      FROM unnest($5::int[], $6::numeric[]) AS x(cultivo_id, ha_cultivo)
+      RETURNING 1
+    )
+    SELECT * FROM upd;
+    `,
+    [id, nombre, superficie, observaciones ?? null, cultivoIds, haCultivos]
   );
+
   return r.rows[0] || null;
 }
 
@@ -161,8 +228,8 @@ async function softDelete(id) {
 module.exports = {
   createLote,
   createLoteWithCultivos,
-  findAll,
-  findById,
-  update,
+  findAll,      // incluye cultivos
+  findById,     // incluye cultivos
+  updateWithCultivos,
   softDelete,
 };

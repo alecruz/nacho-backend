@@ -1,4 +1,4 @@
-// src/modules/lotes/lotes.controller.js
+// /lotes/lotes.controller.js
 const lotesRepo = require("./lotes.repo");
 
 function isPositiveNumber(value) {
@@ -6,13 +6,32 @@ function isPositiveNumber(value) {
   return Number.isFinite(n) && n > 0;
 }
 
+function normalizeCultivosOrNull(cultivos) {
+  if (cultivos === undefined) return null; // no tocar cultivos
+  if (!Array.isArray(cultivos)) return []; // si viene raro, lo tratamos como "vacío"
+
+  const clean = cultivos.map((c) => ({
+    cultivo_id: Number(c.cultivo_id),
+    ha_cultivo: Number(c.ha_cultivo),
+  }));
+
+  for (const c of clean) {
+    if (!Number.isFinite(c.cultivo_id) || c.cultivo_id <= 0) {
+      return { error: "cultivo_id inválido en cultivos[]" };
+    }
+    if (!Number.isFinite(c.ha_cultivo) || c.ha_cultivo <= 0) {
+      return { error: "ha_cultivo debe ser un número mayor a 0 en cultivos[]" };
+    }
+  }
+
+  return { clean };
+}
+
 async function createLote(req, res) {
   try {
     const { campo_id, nombre, superficie, observaciones, cultivos } = req.body;
 
-    if (!campo_id) {
-      return res.status(400).json({ error: "campo_id es obligatorio" });
-    }
+    if (!campo_id) return res.status(400).json({ error: "campo_id es obligatorio" });
     if (!nombre || String(nombre).trim().length === 0) {
       return res.status(400).json({ error: "nombre es obligatorio" });
     }
@@ -22,25 +41,11 @@ async function createLote(req, res) {
 
     const supNum = Number(superficie);
 
-    // ---- Validación / normalización de cultivos (si vienen) ----
     let cultivosClean = [];
-
-    if (Array.isArray(cultivos) && cultivos.length > 0) {
-      cultivosClean = cultivos.map((c) => ({
-        cultivo_id: Number(c.cultivo_id),
-        ha_cultivo: Number(c.ha_cultivo),
-      }));
-
-      for (const c of cultivosClean) {
-        if (!Number.isFinite(c.cultivo_id) || c.cultivo_id <= 0) {
-          return res.status(400).json({ error: "cultivo_id inválido en cultivos[]" });
-        }
-        if (!Number.isFinite(c.ha_cultivo) || c.ha_cultivo <= 0) {
-          return res.status(400).json({ error: "ha_cultivo debe ser un número mayor a 0 en cultivos[]" });
-        }
-      }
-
-      // suma de ha_cultivo <= superficie del lote
+    if (cultivos !== undefined) {
+      const norm = normalizeCultivosOrNull(cultivos);
+      if (norm?.error) return res.status(400).json({ error: norm.error });
+      cultivosClean = norm?.clean ?? [];
       const suma = cultivosClean.reduce((acc, x) => acc + x.ha_cultivo, 0);
       if (suma > supNum + 1e-9) {
         return res.status(400).json({
@@ -49,7 +54,6 @@ async function createLote(req, res) {
       }
     }
 
-    // Insertar lote + lote_cultivos si corresponde
     const lote = await lotesRepo.createLoteWithCultivos({
       campo_id: Number(campo_id),
       nombre: String(nombre).trim(),
@@ -58,9 +62,7 @@ async function createLote(req, res) {
       cultivos: cultivosClean,
     });
 
-    // Si querés devolver ya con cultivos, podés “rehidratar”:
-    const loteFull = await lotesRepo.findById(Number(lote.id));
-    return res.status(201).json(loteFull ?? lote);
+    return res.status(201).json(lote);
   } catch (err) {
     console.error("createLote error:", err);
     return res.status(500).json({ error: "Error interno al crear lote" });
@@ -99,7 +101,7 @@ async function getLoteById(req, res) {
 async function updateLote(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, superficie, observaciones } = req.body;
+    const { nombre, superficie, observaciones, cultivos } = req.body;
 
     if (!nombre || String(nombre).trim().length === 0) {
       return res.status(400).json({ error: "nombre es obligatorio" });
@@ -108,17 +110,37 @@ async function updateLote(req, res) {
       return res.status(400).json({ error: "superficie debe ser un número mayor a 0" });
     }
 
-    const updated = await lotesRepo.update(Number(id), {
+    const supNum = Number(superficie);
+
+    // cultivos:
+    // - undefined => no tocar cultivos
+    // - [] => borrar todos
+    // - [{...}] => reemplazar por esta lista
+    let cultivosCleanOrNull = null;
+    if (cultivos !== undefined) {
+      const norm = normalizeCultivosOrNull(cultivos);
+      if (norm?.error) return res.status(400).json({ error: norm.error });
+
+      const clean = norm?.clean ?? [];
+      const suma = clean.reduce((acc, x) => acc + x.ha_cultivo, 0);
+      if (suma > supNum + 1e-9) {
+        return res.status(400).json({
+          error: "La suma de superficies cultivadas no puede superar la superficie del lote",
+        });
+      }
+
+      cultivosCleanOrNull = clean;
+    }
+
+    const updated = await lotesRepo.updateWithCultivos(Number(id), {
       nombre: String(nombre).trim(),
-      superficie: Number(superficie),
+      superficie: supNum,
       observaciones: observaciones ? String(observaciones).trim() : null,
+      cultivos: cultivosCleanOrNull, // null => no tocar; [] o lista => reemplazar
     });
 
     if (!updated) return res.status(404).json({ error: "Lote no encontrado" });
-
-    // Devolvemos el lote con cultivos (más útil para el front)
-    const updatedFull = await lotesRepo.findById(Number(id));
-    return res.json(updatedFull ?? updated);
+    return res.json(updated);
   } catch (err) {
     console.error("updateLote error:", err);
     return res.status(500).json({ error: "Error interno al actualizar lote" });
