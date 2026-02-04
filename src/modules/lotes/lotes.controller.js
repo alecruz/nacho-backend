@@ -164,8 +164,31 @@ async function updateLote(req, res) {
 
     if (!updated) return res.status(404).json({ error: "Lote no encontrado" });
     return res.json(updated);
-  } catch (err) {
+  } 
+  catch (err) {
     console.error("updateLote error:", err);
+
+    if (err?.code === "23505") {
+      const isDup =
+        err?.constraint === "ux_lotes_campo_nombre_activo" ||
+        (typeof err?.detail === "string" &&
+          err.detail.includes("Key (campo_id, nombre)="));
+
+      if (isDup) {
+        return res.status(409).json({
+          ok: false,
+          code: "LOTE_DUPLICADO",
+          message: "Ya existe un lote activo con ese nombre en este campo.",
+        });
+      }
+
+      return res.status(409).json({
+        ok: false,
+        code: "DUPLICADO",
+        message: "Ya existe un registro con valores duplicados.",
+      });
+    }
+
     return res.status(500).json({ error: "Error interno al actualizar lote" });
   }
 }
