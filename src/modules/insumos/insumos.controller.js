@@ -64,7 +64,7 @@ async function updateInsumo(req, res) {
     }
 
     const existing = await repo.findById(id);
-    if (!existing || existing.cliente_id !== clienteId) {
+    if (!existing || Number(existing.cliente_id) !== Number(clienteId)) {
       return res.status(404).json({ ok: false, error: "Insumo no encontrado" });
     }
 
@@ -120,8 +120,8 @@ async function removeInsumo(req, res) {
     return res.status(400).json({ ok: false, error: "id inválido" });
   }
 
-  const existing = await repo.findById(id);
-  if (!existing || existing.cliente_id !== clienteId) {
+  const existing = await repo.findById(id);  
+  if (!existing || Number(existing.cliente_id) !== Number(clienteId)) {
     return res.status(404).json({ ok: false, error: "Insumo no encontrado" });
   }
 
