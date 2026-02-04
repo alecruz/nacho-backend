@@ -65,6 +65,15 @@ async function createLote(req, res) {
     return res.status(201).json(lote);
   } catch (err) {
     console.error("createLote error:", err);
+
+    if (err.code === "23505" && err.constraint === "ux_lotes_campo_nombre_activo") {
+      return res.status(409).json({
+        ok: false,
+        code: "LOTE_DUPLICADO",
+        message: "Ya existe un lote activo con ese nombre en este campo."
+      });
+    }
+
     return res.status(500).json({ error: "Error interno al crear lote" });
   }
 }
