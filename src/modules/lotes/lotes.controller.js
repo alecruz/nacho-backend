@@ -66,11 +66,25 @@ async function createLote(req, res) {
   } catch (err) {
     console.error("createLote error:", err);
 
-    if (err.code === "23505" && err.constraint === "ux_lotes_campo_nombre_activo") {
+    if (err?.code === "23505") {
+      const isLoteNombreDup =
+        err?.constraint === "ux_lotes_campo_nombre_activo" ||
+        (typeof err?.detail === "string" &&
+          err.detail.includes("Key (campo_id, nombre)="));
+
+      if (isLoteNombreDup) {
+        return res.status(409).json({
+          ok: false,
+          code: "LOTE_DUPLICADO",
+          message: "Ya existe un lote activo con ese nombre en este campo.",
+        });
+      }
+
+      // Si querés, un fallback genérico para cualquier UNIQUE
       return res.status(409).json({
         ok: false,
-        code: "LOTE_DUPLICADO",
-        message: "Ya existe un lote activo con ese nombre en este campo."
+        code: "DUPLICADO",
+        message: "Ya existe un registro con valores duplicados.",
       });
     }
 
