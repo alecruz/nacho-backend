@@ -11,6 +11,7 @@ const camposRoutes = require("./modules/campos/campos.routes");
 const cultivosRoutes = require("./modules/cultivos/cultivos.routes");
 const lotesRoutes = require("./modules/lotes/lotes.routes");
 const insumosRoutes = require("./modules/insumos/insumos.routes");
+const parametrosRoutes = require("./modules/parametros/parametros.routes");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/campos", camposRoutes); // módulo campos
 app.use("/cultivos", cultivosRoutes); // módulo cultivos
 app.use("/lotes", lotesRoutes); // módulo lotes
 app.use("/insumos", insumosRoutes); // módulo insumos
+app.use("/parametros", parametrosRoutes); // módulo parametros
 
 app.use(notFound);
 app.use(errorHandler);
