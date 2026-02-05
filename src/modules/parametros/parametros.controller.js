@@ -131,4 +131,5 @@ async function removeParametro(req, res) {
   return res.json({ ok: true, data: updated });
 }
 
+
 module.exports = { listParametros, createParametro, updateParametro, removeParametro };
